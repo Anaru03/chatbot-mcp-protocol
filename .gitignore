@@ -1,0 +1,58 @@
+# =========================================
+# ARCHIVOS DE ENTORNO VIRTUAL
+# =========================================
+venv/
+env/
+
+# =========================================
+# ARCHIVOS DE PYTHON
+# =========================================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# =========================================
+# ARCHIVOS DE CONFIGURACIÓN LOCALES
+# =========================================
+*.env
+.env.*
+*.ini
+*.cfg
+
+# =========================================
+# LOGS Y SALIDAS TEMPORALES
+# =========================================
+*.log
+logs/
+*.tmp
+*.swp
+
+# =========================================
+# ARCHIVOS DE DEPENDENCIAS
+# =========================================
+pip-log.txt
+pip-delete-this-directory.txt
+
+# =========================================
+# CARPETAS DE PRUEBAS LOCALES
+# =========================================
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+tests/__pycache__/
+
+# =========================================
+# ARCHIVOS DEL EDITOR/IDE
+# =========================================
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# =========================================
+# ARCHIVOS DEL SISTEMA OPERATIVO
+# =========================================
+.DS_Store
+Thumbs.db
