@@ -1,0 +1,10 @@
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "total_connections": 350,
+    "failed_attempts": 45,
+    "suspicious_ips": ["192.168.0.12", "201.54.89.3"],
+    "possible_bruteforce": true
+  },
+  "id": 1
+}
