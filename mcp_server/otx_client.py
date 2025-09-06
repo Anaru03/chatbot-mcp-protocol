@@ -1,6 +1,10 @@
 #https://otx.alienvault.com/api 
 import requests
 import os
+from dotenv import load_dotenv
+
+# Cargar variables de .env
+load_dotenv()
 
 OTX_API_KEY = os.getenv("OTX_API_KEY", "YOUR_API_KEY_HERE")
 OTX_BASE_URL = "https://otx.alienvault.com/api/v1/indicators/IPv4"
