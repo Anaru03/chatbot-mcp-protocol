@@ -3,11 +3,10 @@ import os
 from google import genai
 
 EXAMPLE_LOGS = "mcp_server/example_logs"
-
 client = genai.Client()
 
-history = []
-
+chat_history = []
+mcp_history = []
 
 def list_logs(folder):
     try:
@@ -15,39 +14,34 @@ def list_logs(folder):
     except FileNotFoundError:
         return []
 
-
 def choose_log():
     logs = list_logs(EXAMPLE_LOGS)
     if not logs:
         print("No hay logs de ejemplo disponibles.")
         return None
-
+    
     print("\nLogs de ejemplo disponibles:")
     for i, log in enumerate(logs, 1):
         print(f"{i}. {log}")
-
+    
     while True:
         idx = input("Selecciona el log a analizar (número): ").strip()
         if idx.isdigit() and 1 <= int(idx) <= len(logs):
-            return os.path.join(EXAMPLE_LOGS, logs[int(idx) - 1])
+            return os.path.join(EXAMPLE_LOGS, logs[int(idx)-1])
         print("Opción inválida, intenta nuevamente.")
 
-
-def ask_gemini(history, prompt):
-    """Enviar pregunta a Gemini y obtener respuesta con historial"""
-    # Construir historial como un string
-    history_text = "\n".join([f"{h['role']}: {h['content']}" for h in history])
-    full_prompt = history_text + f"\nUsuario: {prompt}\nAsistente:"
-
+def ask_gemini(prompt):
+    chat_history.append(f"Usuario: {prompt}")
+    context = "\n".join(chat_history)
     response = client.models.generate_content(
-        model="gemini-2.0-flash",  # puedes cambiar a gemini-2.5-flash
-        contents=full_prompt
+        model="gemini-2.5-flash",
+        contents=context
     )
-    return response.text
-
+    answer = response.text
+    chat_history.append(f"Gemini: {answer}")
+    return answer
 
 def interactive_chat():
-    # Preguntar nombre
     nombre = input("¡Hola! ¿Cuál es tu nombre? ").strip()
     if not nombre:
         nombre = "Usuario"
@@ -59,18 +53,19 @@ def interactive_chat():
         print("1. Analizar log de ejemplo")
         print("2. Escribir/pegar un log manualmente")
         print("3. Preguntar al LLM")
-        print("4. Salir")
-        choice = input("Elige una opción (1-4): ").strip()
+        print("4. Ver historial de interacciones MCP")
+        print("5. Salir")
+        choice = input("Elige una opción (1-5): ").strip()
 
         if choice == "1":
             log_path = choose_log()
             if log_path is None:
                 continue
-
             try:
                 with open(log_path, "r", encoding="utf-8") as f:
                     contents = f.read()
                 result = analyze_log_file(contents)
+                mcp_history.append({"tipo": "análisis", "contenido": log_path, "resultado": result})
             except Exception as e:
                 print(f"Error al leer o analizar el log: {e}")
                 continue
@@ -86,19 +81,30 @@ def interactive_chat():
             contents = "\n".join(lines)
             try:
                 result = analyze_log_file(contents)
+                mcp_history.append({"tipo": "análisis", "contenido": "manual", "resultado": result})
             except Exception as e:
                 print(f"Error al analizar el log: {e}")
                 continue
 
         elif choice == "3":
             pregunta = input("Escribe tu pregunta para el LLM: ").strip()
-            respuesta = ask_gemini(history, pregunta)
-            print(f"\nLLM dice: {respuesta}\n")
+            respuesta = ask_gemini(pregunta)
+            print(f"LLM dice: {respuesta}\n")
+            mcp_history.append({"tipo": "llm", "pregunta": pregunta, "respuesta": respuesta})
 
-            history.append({"role": "user", "content": pregunta})
-            history.append({"role": "assistant", "content": respuesta})
+        elif choice == "4":
+            if not mcp_history:
+                print("\n📭 No hay interacciones con MCP registradas aún.\n")
+            else:
+                print("\n=== Historial de interacciones MCP ===")
+                for i, entry in enumerate(mcp_history, 1):
+                    if entry["tipo"] == "análisis":
+                        print(f"{i}. Análisis de log ({entry['contenido']}) -> {entry['resultado']}")
+                    elif entry["tipo"] == "llm":
+                        print(f"{i}. Pregunta: {entry['pregunta']} -> Respuesta: {entry['respuesta']}")
+                print()
 
-        elif choice == "4" or choice.lower() == "salir":
+        elif choice == "5" or choice.lower() == "salir":
             print(f"¡Hasta luego, {nombre}! 👋")
             break
 
