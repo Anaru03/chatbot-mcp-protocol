@@ -46,65 +46,52 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+### 4. Ejecutar el servidor MCP local
+
+Con el entorno virtual activado, inicia el servidor usando `uvicorn`:
+
+```bash
+uvicorn mcp_server.server:app --reload
+```
+
+Esto levantará el servidor MCP en `http://127.0.0.1:8000/`, listo para recibir solicitudes de análisis de logs desde el chatbot.
+
 ---
 
-## 🎮 Uso del Chatbot Interactivo
+## 🤖 Uso del Chatbot
 
-Ejecutar el chatbot interactivo que consume el MCP Server:
+Para iniciar el chatbot interactivo y conectar con el MCP Server local:
 
 ```bash
 python chatbot_interactive_test.py
 ```
 
-### Menú principal del chatbot:
+El chatbot permitirá:
 
-1. Analizar log de ejemplo.
-2. Escribir/pegar un log manualmente.
-3. Preguntar al LLM (manteniendo contexto en la sesión).
+1. Analizar logs de ejemplo.
+2. Ingresar logs manualmente.
+3. Preguntar al LLM.
 4. Usar Git MCP server (crear repositorios, archivos y commits).
-5. Ver historial de interacciones MCP (en tabla ordenada).
-6. Salir.
+5. Ver historial de interacciones MCP.
 
 ---
 
-## 📂 Ejemplo de Análisis de Log
+## 🔍 Funcionalidad del MCP Server
 
-1. Seleccionar un log de ejemplo (`sample.log`) o ingresar manualmente un log.
-2. El chatbot mostrará:
+* Analiza archivos de logs de red (`.log` o `.txt`).
+* Detecta intentos fallidos de conexión.
+* Identifica accesos sospechosos desde IPs desconocidas.
+* Detecta posibles ataques de fuerza bruta.
+* Genera un reporte en formato JSON con los hallazgos.
 
-   * Total de conexiones.
-   * Intentos fallidos.
-   * IPs sospechosas.
-   * Posible ataque de fuerza bruta.
-   * Reputación de las IPs.
+### Endpoints del Servidor
 
----
-
-## 📖 Historial de Interacciones
-
-El chatbot mantiene un historial completo de interacciones con:
-
-* Logs analizados.
-* Preguntas al LLM.
-* Acciones en Git MCP server.
-
-El historial se puede ver en cualquier momento desde la opción 5 del menú.
+| Endpoint       | Método | Descripción                  | Entrada                 | Salida                           |
+| -------------- | ------ | ---------------------------- | ----------------------- | -------------------------------- |
+| /analyze\_logs | POST   | Analiza un archivo de log    | Archivo `.log` o `.txt` | JSON con resumen de hallazgos    |
+| /status        | GET    | Verifica estado del servidor | N/A                     | Estado del servidor (OK / Error) |
 
 ---
-
-## ⚙️ Requisitos
-
-* Python 3.11+
-* Librerías listadas en `requirements.txt`:
-
-  * `fastapi`
-  * `uvicorn`
-  * `pandas`
-  * `google-genai`
-  * etc.
-
----
-
 ## 📌 Notas
 
 * Todos los análisis se realizan localmente.
