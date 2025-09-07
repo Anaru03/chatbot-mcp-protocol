@@ -4,7 +4,10 @@ from google import genai
 
 EXAMPLE_LOGS = "mcp_server/example_logs"
 
-client = genai.Client() 
+client = genai.Client()
+
+history = []
+
 
 def list_logs(folder):
     try:
@@ -12,36 +15,44 @@ def list_logs(folder):
     except FileNotFoundError:
         return []
 
+
 def choose_log():
     logs = list_logs(EXAMPLE_LOGS)
     if not logs:
         print("No hay logs de ejemplo disponibles.")
         return None
-    
+
     print("\nLogs de ejemplo disponibles:")
     for i, log in enumerate(logs, 1):
         print(f"{i}. {log}")
-    
+
     while True:
         idx = input("Selecciona el log a analizar (número): ").strip()
         if idx.isdigit() and 1 <= int(idx) <= len(logs):
-            return os.path.join(EXAMPLE_LOGS, logs[int(idx)-1])
+            return os.path.join(EXAMPLE_LOGS, logs[int(idx) - 1])
         print("Opción inválida, intenta nuevamente.")
 
-def ask_gemini(prompt):
-    """Enviar pregunta a Gemini y obtener respuesta"""
+
+def ask_gemini(history, prompt):
+    """Enviar pregunta a Gemini y obtener respuesta con historial"""
+    # Construir historial como un string
+    history_text = "\n".join([f"{h['role']}: {h['content']}" for h in history])
+    full_prompt = history_text + f"\nUsuario: {prompt}\nAsistente:"
+
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt
+        model="gemini-2.0-flash",  # puedes cambiar a gemini-2.5-flash
+        contents=full_prompt
     )
     return response.text
 
+
 def interactive_chat():
+    # Preguntar nombre
     nombre = input("¡Hola! ¿Cuál es tu nombre? ").strip()
     if not nombre:
         nombre = "Usuario"
 
-    print(f"\nHola {nombre}, bienvenida al MCP Log Analyzer Chatbot 😃")
+    print(f"\n🤖 Hola {nombre}, bienvenida al MCP Log Analyzer Chatbot 🤖")
     print("Escoge una de las siguientes opciones para comenzar:\n")
 
     while True:
@@ -81,8 +92,11 @@ def interactive_chat():
 
         elif choice == "3":
             pregunta = input("Escribe tu pregunta para el LLM: ").strip()
-            respuesta = ask_gemini(pregunta)
-            print(f"LLM dice: {respuesta}\n")
+            respuesta = ask_gemini(history, pregunta)
+            print(f"\nLLM dice: {respuesta}\n")
+
+            history.append({"role": "user", "content": pregunta})
+            history.append({"role": "assistant", "content": respuesta})
 
         elif choice == "4" or choice.lower() == "salir":
             print(f"¡Hasta luego, {nombre}! 👋")
