@@ -1,16 +1,42 @@
 from mcp_server.analyzer import analyze_log_file
 from .git_mcp_client import create_repo, create_file, commit, list_repos
 import os
+import json
 from google import genai
 from datetime import datetime
 from tabulate import tabulate
+from .logger import log_interaction
+from .show_logs import show_logs
 
 EXAMPLE_LOGS = "mcp_server/example_logs"
+CONTEXT_FILE = "chatbot/logs/context.json"
+
 client = genai.Client()
 
-chat_history = []
-mcp_history = []
+# -------------------------------
+# Manejo de contexto persistente
+# -------------------------------
+def load_context():
+    if os.path.exists(CONTEXT_FILE):
+        try:
+            with open(CONTEXT_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("chat_history", []), data.get("mcp_history", [])
+        except Exception:
+            return [], []
+    return [], []
 
+def save_context(chat_history, mcp_history):
+    os.makedirs(os.path.dirname(CONTEXT_FILE), exist_ok=True)
+    with open(CONTEXT_FILE, "w", encoding="utf-8") as f:
+        json.dump({
+            "chat_history": chat_history,
+            "mcp_history": mcp_history
+        }, f, indent=2)
+
+# -------------------------------
+# Funciones auxiliares
+# -------------------------------
 def list_logs(folder):
     try:
         return [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
@@ -31,7 +57,7 @@ def choose_log():
             return os.path.join(EXAMPLE_LOGS, logs[int(idx)-1])
         print("Opción inválida, intenta nuevamente.")
 
-def ask_gemini(prompt):
+def ask_gemini(prompt, chat_history):
     chat_history.append(f"Usuario: {prompt}")
     context = "\n".join(chat_history)
     response = client.models.generate_content(
@@ -42,7 +68,12 @@ def ask_gemini(prompt):
     chat_history.append(f"Gemini: {answer}")
     return answer
 
+# -------------------------------
+# Chat interactivo principal
+# -------------------------------
 def interactive_chat():
+    chat_history, mcp_history = load_context()
+
     nombre = input("¡Hola! ¿Cuál es tu nombre? ").strip()
     if not nombre:
         nombre = "Usuario"
@@ -55,9 +86,11 @@ def interactive_chat():
         print("3. Preguntar al LLM")
         print("4. Usar Git MCP server")
         print("5. Ver historial de interacciones MCP")
-        print("6. Salir")
-        choice = input("Elige una opción (1-6): ").strip()
+        print("6. Ver logs completos del chatbot")  # antes opción 7
+        print("7. Salir")  # antes opción 6
+        choice = input("Elige una opción (1-7): ").strip()
 
+        # ------------------ OPCIÓN 1 y 2 ------------------
         if choice == "1" or choice == "2":
             if choice == "1":
                 log_path = choose_log()
@@ -87,6 +120,14 @@ def interactive_chat():
                     "resultado": result,
                     "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 })
+
+                log_interaction(
+                    user_message="Analizar log",
+                    bot_response=str(result),
+                    source="mcp",
+                    mcp_server="analyzer"
+                )
+
                 print("\n=== Resultados del Log ===")
                 print(f"Total de conexiones: {result['total_connections']}")
                 print(f"Intentos fallidos: {result['failed_attempts']}")
@@ -105,9 +146,10 @@ def interactive_chat():
                 print(f"Error al analizar el log: {e}")
                 continue
 
+        # ------------------ OPCIÓN 3 ------------------
         elif choice == "3":
             pregunta = input("Escribe tu pregunta para el LLM: ").strip()
-            respuesta = ask_gemini(pregunta)
+            respuesta = ask_gemini(pregunta, chat_history)
             print(f"LLM dice: {respuesta}\n")
             mcp_history.append({
                 "tipo": "llm",
@@ -116,6 +158,13 @@ def interactive_chat():
                 "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             })
 
+            log_interaction(
+                user_message=pregunta,
+                bot_response=respuesta,
+                source="chatbot"
+            )
+
+        # ------------------ OPCIÓN 4 ------------------
         elif choice == "4":
             while True:
                 print("\n--- Git MCP server ---")
@@ -131,6 +180,8 @@ def interactive_chat():
                     msg = create_repo(repo_name)
                     print(msg)
                     mcp_history.append({"tipo": "git", "acción": "crear_repo", "repositorio": repo_name, "resultado": msg, "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+                    log_interaction(f"Crear repo {repo_name}", msg, source="mcp", mcp_server="git")
+
                 elif git_choice == "2":
                     repo_name = input("Repositorio donde crear el archivo: ").strip()
                     file_name = input("Nombre del archivo: ").strip()
@@ -138,12 +189,16 @@ def interactive_chat():
                     msg = create_file(repo_name, file_name, content)
                     print(msg)
                     mcp_history.append({"tipo": "git", "acción": "crear_file", "repositorio": repo_name, "archivo": file_name, "resultado": msg, "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+                    log_interaction(f"Crear archivo {file_name} en {repo_name}", msg, source="mcp", mcp_server="git")
+
                 elif git_choice == "3":
                     repo_name = input("Repositorio donde hacer commit: ").strip()
                     message = input("Mensaje del commit: ").strip()
                     msg = commit(repo_name, message)
                     print(msg)
                     mcp_history.append({"tipo": "git", "acción": "commit", "repositorio": repo_name, "mensaje": msg, "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+                    log_interaction(f"Commit en {repo_name}", msg, source="mcp", mcp_server="git")
+
                 elif git_choice == "4":
                     repos = list_repos()
                     if repos:
@@ -157,6 +212,7 @@ def interactive_chat():
                 else:
                     print("Opción inválida, intenta nuevamente.")
 
+        # ------------------ OPCIÓN 5 ------------------
         elif choice == "5":
             if not mcp_history:
                 print("\n📭 No hay interacciones con MCP registradas aún.\n")
@@ -194,6 +250,16 @@ def interactive_chat():
                 
                 print(tabulate(table, headers=["#", "Fecha", "Tipo", "Resumen"], tablefmt="grid"))
 
+        # ------------------ OPCIÓN 6 ------------------
         elif choice == "6":
+            print("\n=== Mostrando logs completos del chatbot ===\n")
+            show_logs()
+
+        # ------------------ OPCIÓN 7 ------------------
+        elif choice == "7":
+            save_context(chat_history, mcp_history)  # guardar antes de salir
             print(f"¡Hasta luego, {nombre}! 👋")
             break
+
+        else:
+            print("Opción no válida, intenta nuevamente.")
