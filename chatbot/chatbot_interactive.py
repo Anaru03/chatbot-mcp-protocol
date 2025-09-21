@@ -2,14 +2,19 @@ from mcp_server.analyzer import analyze_log_file
 from .git_mcp_client import create_repo, create_file, commit, list_repos
 import os
 import json
+import re
 from google import genai
 from datetime import datetime
 from tabulate import tabulate
 from .logger import log_interaction
 from .show_logs import show_logs
+from .llm_client import query_llm
+import requests  # para MCP local
 
 EXAMPLE_LOGS = "mcp_server/example_logs"
 CONTEXT_FILE = "chatbot/logs/context.json"
+MCP_LOCAL_URL = "http://127.0.0.1:8001/analyze_log_file"
+
 
 client = genai.Client()
 
@@ -81,14 +86,15 @@ def interactive_chat():
     
     while True:
         print("\nEscoge una de las siguientes opciones para comenzar:")
-        print("1. Analizar log de ejemplo")
+        print("1. Analizar log de ejemplo (local)")
         print("2. Escribir/pegar un log manualmente")
         print("3. Preguntar al LLM")
         print("4. Usar Git MCP server")
         print("5. Ver historial de interacciones MCP")
-        print("6. Ver logs completos del chatbot")  # antes opción 7
-        print("7. Salir")  # antes opción 6
-        choice = input("Elige una opción (1-7): ").strip()
+        print("6. Ver logs completos del chatbot")
+        print("7. Analizar log usando MCP local")
+        print("8. Salir")  # siempre la última
+        choice = input("Elige una opción (1-8): ").strip()
 
         # ------------------ OPCIÓN 1 y 2 ------------------
         if choice == "1" or choice == "2":
@@ -109,6 +115,9 @@ def interactive_chat():
                     line = input()
                     if line.strip().upper() == "FIN":
                         break
+                    if not re.match(r"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]", line):
+                        print("⚠ Línea no válida, debe empezar con [YYYY-MM-DD HH:MM:SS]")
+                        continue
                     lines.append(line)
                 contents = "\n".join(lines)
 
@@ -149,7 +158,11 @@ def interactive_chat():
         # ------------------ OPCIÓN 3 ------------------
         elif choice == "3":
             pregunta = input("Escribe tu pregunta para el LLM: ").strip()
-            respuesta = ask_gemini(pregunta, chat_history)
+            try:
+                respuesta = query_llm(pregunta)
+            except Exception as e:
+                respuesta = f"Error al consultar LLM: {e}"
+
             print(f"LLM dice: {respuesta}\n")
             mcp_history.append({
                 "tipo": "llm",
@@ -255,8 +268,42 @@ def interactive_chat():
             print("\n=== Mostrando logs completos del chatbot ===\n")
             show_logs()
 
-        # ------------------ OPCIÓN 7 ------------------
+        # ------------------ OPCIÓN 7 (MCP local) ------------------
         elif choice == "7":
+            log_path = choose_log()
+            if not log_path:
+                continue
+            try:
+                with open(log_path, "rb") as f:
+                    response = requests.post(
+                        MCP_LOCAL_URL,
+                        files={"file": f}
+                    )
+                    result = response.json()
+
+                mcp_history.append({
+                    "tipo": "mcp_local",
+                    "contenido": log_path,
+                    "resultado": result,
+                    "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                })
+
+                log_interaction(
+                    user_message="Analizar log en MCP local",
+                    bot_response=str(result),
+                    source="mcp",
+                    mcp_server="local_log_server"
+                )
+
+                print("\n=== Resultados del Log (MCP local) ===")
+                for key, value in result.items():
+                    print(f"{key}: {value}")
+                print("\n")
+            except Exception as e:
+                print(f"Error al consultar MCP local: {e}")
+
+        # ------------------ OPCIÓN 8 (Salir) ------------------
+        elif choice == "8":
             save_context(chat_history, mcp_history)  # guardar antes de salir
             print(f"¡Hasta luego, {nombre}! 👋")
             break
