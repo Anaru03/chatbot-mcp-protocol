@@ -15,12 +15,9 @@ EXAMPLE_LOGS = "mcp_server/example_logs"
 CONTEXT_FILE = "chatbot/logs/context.json"
 MCP_LOCAL_URL = "http://127.0.0.1:8001/analyze_log_file"
 
-
 client = genai.Client()
 
-# -------------------------------
-# Manejo de contexto persistente
-# -------------------------------
+# ------------------------------- Manejo de contexto -------------------------------
 def load_context():
     if os.path.exists(CONTEXT_FILE):
         try:
@@ -39,9 +36,7 @@ def save_context(chat_history, mcp_history):
             "mcp_history": mcp_history
         }, f, indent=2)
 
-# -------------------------------
-# Funciones auxiliares
-# -------------------------------
+# ------------------------------- Funciones auxiliares -------------------------------
 def list_logs(folder):
     try:
         return [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
@@ -73,17 +68,14 @@ def ask_gemini(prompt, chat_history):
     chat_history.append(f"Gemini: {answer}")
     return answer
 
-# -------------------------------
-# Chat interactivo principal
-# -------------------------------
+# ------------------------------- Chat interactivo principal -------------------------------
 def interactive_chat():
     chat_history, mcp_history = load_context()
-
     nombre = input("¡Hola! ¿Cuál es tu nombre? ").strip()
     if not nombre:
         nombre = "Usuario"
     print(f"\n🤖 Hola {nombre}, bienvenida al MCP Log Analyzer Chatbot 🤖")
-    
+
     while True:
         print("\nEscoge una de las siguientes opciones para comenzar:")
         print("1. Analizar log de ejemplo (local)")
@@ -93,7 +85,7 @@ def interactive_chat():
         print("5. Ver historial de interacciones MCP")
         print("6. Ver logs completos del chatbot")
         print("7. Analizar log usando MCP local")
-        print("8. Salir")  # siempre la última
+        print("8. Salir")
         choice = input("Elige una opción (1-8): ").strip()
 
         # ------------------ OPCIÓN 1 y 2 ------------------
@@ -141,16 +133,30 @@ def interactive_chat():
                 print(f"Total de conexiones: {result['total_connections']}")
                 print(f"Intentos fallidos: {result['failed_attempts']}")
                 print(f"IPs sospechosas: {', '.join(result['suspicious_ips'])}")
-                print(f"Posible ataque de fuerza bruta: {result['possible_bruteforce']}")
-                print("\nReputación de las IPs:")
-                for ip, info in result['ip_reputation'].items():
-                    if "reputación" in info or "reputation" in info:
-                        rep = info.get("reputación", info.get("reputation", "desconocida"))
-                        pulse = info.get("pulse_count", 0)
-                        print(f" - {ip}: {rep} (conteo de alertas: {pulse})")
-                    else:
-                        print(f" - {ip}: Error -> {info.get('error', 'desconocido')}")
-                print("\n")
+                print(f"Posible ataque de fuerza bruta: {result['possible_bruteforce']}\n")
+
+                # ------------------ Mostrar tabla de IPs ------------------
+                if result['ip_reputation']:
+                    table = []
+                    for ip, info in result['ip_reputation'].items():
+                        data = info.get('data', {})
+                        if data:
+                            table.append([
+                                ip,
+                                data.get('abuseConfidenceScore', 0),
+                                data.get('countryCode', ''),
+                                data.get('usageType', ''),
+                                data.get('isp', ''),
+                                data.get('totalReports', 0),
+                                data.get('lastReportedAt', '')
+                            ])
+                        else:
+                            table.append([ip, "Error", "-", "-", "-", "-", info.get('error', 'desconocido')])
+                    headers = ["IP", "AbuseScore", "País", "Uso", "ISP", "TotalReportes", "Último Reporte"]
+                    print(tabulate(table, headers=headers, tablefmt="fancy_grid"))
+                else:
+                    print("No hay IPs sospechosas con reputación disponible.\n")
+
             except Exception as e:
                 print(f"Error al analizar el log: {e}")
                 continue
@@ -296,15 +302,39 @@ def interactive_chat():
                 )
 
                 print("\n=== Resultados del Log (MCP local) ===")
-                for key, value in result.items():
-                    print(f"{key}: {value}")
-                print("\n")
+                print(f"Total de conexiones: {result.get('total_connections', 0)}")
+                print(f"Intentos fallidos: {result.get('failed_attempts', 0)}")
+                print(f"IPs sospechosas: {', '.join(result.get('suspicious_ips', []))}")
+                print(f"Posible ataque de fuerza bruta: {result.get('possible_bruteforce', False)}\n")
+
+                # ------------------ Tabla de IPs ------------------
+                if result.get('ip_reputation'):
+                    table = []
+                    for ip, info in result['ip_reputation'].items():
+                        data = info.get('data', {})
+                        if data:
+                            table.append([
+                                ip,
+                                data.get('abuseConfidenceScore', 0),
+                                data.get('countryCode', ''),
+                                data.get('usageType', ''),
+                                data.get('isp', ''),
+                                data.get('totalReports', 0),
+                                data.get('lastReportedAt', '')
+                            ])
+                        else:
+                            table.append([ip, "Error", "-", "-", "-", "-", info.get('error', 'desconocido')])
+                    headers = ["IP", "AbuseScore", "País", "Uso", "ISP", "TotalReportes", "Último Reporte"]
+                    print(tabulate(table, headers=headers, tablefmt="fancy_grid"))
+                else:
+                    print("No hay IPs sospechosas con reputación disponible.\n")
+
             except Exception as e:
                 print(f"Error al consultar MCP local: {e}")
 
         # ------------------ OPCIÓN 8 (Salir) ------------------
         elif choice == "8":
-            save_context(chat_history, mcp_history)  # guardar antes de salir
+            save_context(chat_history, mcp_history)
             print(f"¡Hasta luego, {nombre}! 👋")
             break
 

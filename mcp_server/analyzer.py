@@ -1,12 +1,12 @@
+# https://docs.abuseipdb.com/#introduction
+
 import re
 from collections import Counter
-from mcp_server.otx_client import check_ip_reputation
-
+from mcp_server.ip_reputation import check_ip_reputation  #  AbuseIPDB
 
 def extract_ips(log_text: str):
     """Extrae direcciones IPv4 de los logs"""
     return re.findall(r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b", log_text)
-
 
 def analyze_log_file(log_text: str):
     """Analiza logs y consulta reputación de IPs sospechosas"""
@@ -22,7 +22,7 @@ def analyze_log_file(log_text: str):
     # IPs sospechosas: las que aparecen más de 3 veces
     suspicious_ips = [ip for ip, count in ip_counts.items() if count > 3]
 
-    # Reputación de IPs sospechosas
+    # Reputación de IPs sospechosas usando AbuseIPDB
     ip_reputation = {}
     for ip in suspicious_ips:
         try:
