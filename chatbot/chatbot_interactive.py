@@ -57,16 +57,9 @@ def choose_log():
             return os.path.join(EXAMPLE_LOGS, logs[int(idx)-1])
         print("Opción inválida, intenta nuevamente.")
 
-def ask_gemini(prompt, chat_history):
-    chat_history.append(f"Usuario: {prompt}")
-    context = "\n".join(chat_history)
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=context
-    )
-    answer = response.text
-    chat_history.append(f"Gemini: {answer}")
-    return answer
+def chunk_text(text, size=120):
+    """Divide un texto en fragmentos de longitud size para impresión ordenada"""
+    return [text[i:i+size] for i in range(0, len(text), size)]
 
 # ------------------------------- Chat interactivo principal -------------------------------
 def interactive_chat():
@@ -169,7 +162,13 @@ def interactive_chat():
             except Exception as e:
                 respuesta = f"Error al consultar LLM: {e}"
 
-            print(f"LLM dice: {respuesta}\n")
+            print("\n=== Pregunta ===")
+            print(pregunta)
+            print("\n=== Respuesta ===")
+            for bloque in chunk_text(respuesta, 120):
+                print(bloque)
+            print("\n")
+
             mcp_history.append({
                 "tipo": "llm",
                 "pregunta": pregunta,
@@ -197,7 +196,7 @@ def interactive_chat():
                 if git_choice == "1":
                     repo_name = input("Nombre del repositorio: ").strip()
                     msg = create_repo(repo_name)
-                    print(msg)
+                    print(tabulate([["Acción", f"Crear repo {repo_name}"], ["Resultado", msg]], tablefmt="fancy_grid"))
                     mcp_history.append({"tipo": "git", "acción": "crear_repo", "repositorio": repo_name, "resultado": msg, "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
                     log_interaction(f"Crear repo {repo_name}", msg, source="mcp", mcp_server="git")
 
@@ -206,7 +205,7 @@ def interactive_chat():
                     file_name = input("Nombre del archivo: ").strip()
                     content = input("Contenido del archivo: ").strip()
                     msg = create_file(repo_name, file_name, content)
-                    print(msg)
+                    print(tabulate([["Acción", f"Crear archivo {file_name} en {repo_name}"], ["Resultado", msg]], tablefmt="fancy_grid"))
                     mcp_history.append({"tipo": "git", "acción": "crear_file", "repositorio": repo_name, "archivo": file_name, "resultado": msg, "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
                     log_interaction(f"Crear archivo {file_name} en {repo_name}", msg, source="mcp", mcp_server="git")
 
@@ -214,18 +213,17 @@ def interactive_chat():
                     repo_name = input("Repositorio donde hacer commit: ").strip()
                     message = input("Mensaje del commit: ").strip()
                     msg = commit(repo_name, message)
-                    print(msg)
+                    print(tabulate([["Acción", f"Commit en {repo_name}"], ["Mensaje", message], ["Resultado", msg]], tablefmt="fancy_grid"))
                     mcp_history.append({"tipo": "git", "acción": "commit", "repositorio": repo_name, "mensaje": msg, "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
                     log_interaction(f"Commit en {repo_name}", msg, source="mcp", mcp_server="git")
 
                 elif git_choice == "4":
                     repos = list_repos()
                     if repos:
-                        print("\nRepositorios existentes:")
-                        for r in repos:
-                            print(f" - {r}")
+                        table = [[i+1, r] for i, r in enumerate(repos)]
+                        print(tabulate(table, headers=["#", "Repositorio"], tablefmt="fancy_grid"))
                     else:
-                        print("\nNo hay repositorios creados aún.")
+                        print("No hay repositorios creados aún.")
                 elif git_choice == "5":
                     break
                 else:
@@ -237,37 +235,37 @@ def interactive_chat():
                 print("\n📭 No hay interacciones con MCP registradas aún.\n")
             else:
                 print("\n=== Historial de interacciones MCP ===\n")
-                table = []
                 for i, entry in enumerate(mcp_history, 1):
                     fecha = entry.get("fecha", "")
                     tipo = entry.get("tipo", "")
+                    print(f"{i}. [{fecha}] ({tipo})")
                     if tipo == "análisis":
                         contenido = entry.get("contenido", "")
                         total = entry["resultado"].get("total_connections", "")
                         fallidos = entry["resultado"].get("failed_attempts", "")
-                        resumen = f"Conexiones: {total}, Fallidos: {fallidos}, Log: {contenido}"
+                        print(f"   - Conexiones: {total}, Fallidos: {fallidos}, Log: {contenido}")
                     elif tipo == "llm":
                         pregunta = entry.get("pregunta", "")
                         respuesta = entry.get("respuesta", "")
-                        resumen = f"P: {pregunta} | R: {respuesta[:50]}..."
+                        print(f"   - Pregunta: {pregunta}")
+                        for bloque in chunk_text(respuesta, 100):
+                            print(f"     {bloque}")
                     elif tipo == "git":
                         accion = entry.get("acción", "")
                         repo = entry.get("repositorio", "")
                         archivo = entry.get("archivo", "")
                         mensaje = entry.get("mensaje", "")
                         resultado = entry.get("resultado", "")
-                        resumen = f"Acción: {accion}, Repo: {repo}"
+                        print(f"   - Acción: {accion}, Repo: {repo}")
                         if archivo:
-                            resumen += f", Archivo: {archivo}"
+                            print(f"     Archivo: {archivo}")
                         if mensaje:
-                            resumen += f", Mensaje: {mensaje}"
+                            print(f"     Mensaje: {mensaje}")
                         if resultado:
-                            resumen += f", Resultado: {resultado}"
+                            print(f"     Resultado: {resultado}")
                     else:
-                        resumen = str(entry)
-                    table.append([i, fecha, tipo, resumen])
-                
-                print(tabulate(table, headers=["#", "Fecha", "Tipo", "Resumen"], tablefmt="grid"))
+                        print(f"   - {entry}")
+                    print("-"*60)
 
         # ------------------ OPCIÓN 6 ------------------
         elif choice == "6":
@@ -307,7 +305,6 @@ def interactive_chat():
                 print(f"IPs sospechosas: {', '.join(result.get('suspicious_ips', []))}")
                 print(f"Posible ataque de fuerza bruta: {result.get('possible_bruteforce', False)}\n")
 
-                # ------------------ Tabla de IPs ------------------
                 if result.get('ip_reputation'):
                     table = []
                     for ip, info in result['ip_reputation'].items():
