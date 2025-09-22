@@ -9,13 +9,17 @@ from tabulate import tabulate
 from .logger import log_interaction
 from .show_logs import show_logs
 from .llm_client import query_llm
-import requests  # para MCP local
+import requests
+from chatbot.mcp_client import MCPClient
+from chatbot.mcp_integration import search_song, create_playlist, add_to_history, get_history
 
+# ------------------------------ Configuración ------------------------------
 EXAMPLE_LOGS = "mcp_server/example_logs"
 CONTEXT_FILE = "chatbot/logs/context.json"
 MCP_LOCAL_URL = "http://127.0.0.1:8001/analyze_log_file"
 
 client = genai.Client()
+spotify_history = []
 
 # ------------------------------- Manejo de contexto -------------------------------
 def load_context():
@@ -78,11 +82,12 @@ def interactive_chat():
         print("5. Ver historial de interacciones MCP")
         print("6. Ver logs completos del chatbot")
         print("7. Analizar log usando MCP local")
-        print("8. Salir")
-        choice = input("Elige una opción (1-8): ").strip()
+        print("8. Spotify MCP")
+        print("9. Salir")
+        choice = input("Elige una opción (1-9): ").strip()
 
-        # ------------------ OPCIÓN 1 y 2 ------------------
-        if choice == "1" or choice == "2":
+        # ------------------ OPCIONES 1 y 2 ------------------
+        if choice in ["1", "2"]:
             if choice == "1":
                 log_path = choose_log()
                 if not log_path:
@@ -128,7 +133,6 @@ def interactive_chat():
                 print(f"IPs sospechosas: {', '.join(result['suspicious_ips'])}")
                 print(f"Posible ataque de fuerza bruta: {result['possible_bruteforce']}\n")
 
-                # ------------------ Mostrar tabla de IPs ------------------
                 if result['ip_reputation']:
                     table = []
                     for ip, info in result['ip_reputation'].items():
@@ -263,6 +267,15 @@ def interactive_chat():
                             print(f"     Mensaje: {mensaje}")
                         if resultado:
                             print(f"     Resultado: {resultado}")
+                    elif tipo == "spotify_search":
+                        query = entry.get("query", "")
+                        print(f"   - Spotify búsqueda: {query}")
+                        for t in entry.get("results", []):
+                            print(f"     {t['name']} - {', '.join(t['artists'])}")
+                    elif tipo == "spotify_playlist":
+                        name = entry.get("name", "")
+                        url = entry.get("url", "")
+                        print(f"   - Playlist creada: {name} -> {url}")
                     else:
                         print(f"   - {entry}")
                     print("-"*60)
@@ -329,11 +342,59 @@ def interactive_chat():
             except Exception as e:
                 print(f"Error al consultar MCP local: {e}")
 
-        # ------------------ OPCIÓN 8 (Salir) ------------------
+        # ------------------ OPCIÓN 8 (Spotify MCP) ------------------
         elif choice == "8":
+            while True:
+                print("\n--- Spotify MCP ---")
+                print("1. Buscar canción")
+                print("2. Crear playlist con últimas canciones buscadas")
+                print("3. Volver al menú principal")
+                spotify_choice = input("Elige una opción (1-3): ").strip()
+
+                if spotify_choice == "1":
+                    query = input("Ingresa el nombre de la canción o artista: ").strip()
+                    results = search_song(query)
+                    if results:
+                        print("Resultados encontrados:")
+                        for i, track in enumerate(results, 1):
+                            print(f"{i}. {track['name']} - {', '.join(track['artists'])}")
+                        spotify_history = results
+                        add_to_history(results)
+                        mcp_history.append({
+                            "tipo": "spotify_search",
+                            "query": query,
+                            "results": results,
+                            "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        })
+                    else:
+                        print("No se encontraron resultados.")
+
+                elif spotify_choice == "2":
+                    history = get_history()
+                    if not history:
+                        print("Primero busca canciones antes de crear una playlist.")
+                        continue
+                    playlist_name = input("Nombre de la playlist: ").strip()
+                    track_ids = [track["id"] for track in history]
+                    url = create_playlist(playlist_name, track_ids, public=True)
+                    if url:
+                        print(f"✅ Playlist creada: {url}")
+                        mcp_history.append({
+                            "tipo": "spotify_playlist",
+                            "name": playlist_name,
+                            "track_ids": track_ids,
+                            "url": url,
+                            "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        })
+                elif spotify_choice == "3":
+                    break
+                else:
+                    print("Opción inválida, intenta nuevamente.")
+
+                    
+        # ------------------ OPCIÓN 9 (Salir) ------------------
+        elif choice == "9":
             save_context(chat_history, mcp_history)
             print(f"¡Hasta luego, {nombre}! 👋")
             break
-
-        else:
-            print("Opción no válida, intenta nuevamente.")
+                    
