@@ -40,3 +40,7 @@ tests/__pycache__/
 # Sistema operativo
 .DS_Store
 Thumbs.db
+
+# Docker
+*.tar
+docker-compose.override.yml
