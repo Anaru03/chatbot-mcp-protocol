@@ -16,7 +16,7 @@ from chatbot.mcp_integration import search_song, create_playlist, add_to_history
 # ------------------------------ Configuración ------------------------------
 EXAMPLE_LOGS = "mcp_server/example_logs"
 CONTEXT_FILE = "chatbot/logs/context.json"
-MCP_LOCAL_URL = "http://127.0.0.1:8001/analyze_log_file"
+MCP_LOCAL_URL = "http://localhost:8001/analyze_logs"
 
 client = genai.Client()
 spotify_history = []

@@ -1,4 +1,3 @@
-# mcp_server/local_log_server.py
 from fastapi import FastAPI, UploadFile, File, Request
 from fastapi.responses import JSONResponse
 from mcp_server.analyzer import analyze_log_file
@@ -45,4 +44,3 @@ async def jsonrpc(request: Request):
         return JSONResponse(content={"jsonrpc": "2.0",
                                      "error": {"code": -32000, "message": str(e)},
                                      "id": None})
-
